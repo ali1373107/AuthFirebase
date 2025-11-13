@@ -1,30 +1,40 @@
 // Import the functions you need from the SDKs you need
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import * as firebaseAuth from 'firebase/auth';
-    const reactNativePersistence = (firebaseAuth as any).getReactNativePersistence;
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getFirestore, Firestore } from "firebase/firestore";
 
-import { initializeApp } from "firebase/app";
-import { initializeAuth } from "firebase/auth";
-
-import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyDWNsET7xFYpbaRZe2t3BFuSizlxNbZRdM",
-  authDomain: "fir-auth-a5ee4.firebaseapp.com",
-  projectId: "fir-auth-a5ee4",
-  storageBucket: "fir-auth-a5ee4.firebasestorage.app",
-  messagingSenderId: "54464990155",
-  appId: "1:54464990155:web:98cb6452864e498c6d444e",
-  measurementId: "G-8GCH0YSLLY"
+  apiKey: "AIzaSyBX5Ph6b1PlUXmwM6i0-M7EAQigBUHYEiE",
+  authDomain: "safe-travel-fab26.firebaseapp.com",
+  projectId: "safe-travel-fab26",
+  storageBucket: "safe-travel-fab26.firebasestorage.app",
+  messagingSenderId: "845088855024",
+  appId: "1:845088855024:web:8aa3abd6ce93b37a5c8335",
+  measurementId: "G-WYGVF83F2D"
 };
 
-// Initialize Firebase
-export const app = initializeApp(firebaseConfig);
-export const auth = initializeAuth(app,
-  {
-    persistence: reactNativePersistence(ReactNativeAsyncStorage)
+let app: FirebaseApp;
+let auth: firebaseAuth.Auth;
+let db: Firestore;
+
+const reactNativePersistence = (firebaseAuth as any).getReactNativePersistence;
+
+// This check prevents us from initializing the app more than once
+if (!getApps().length) {
+  try {
+    app = initializeApp(firebaseConfig);
+    auth = firebaseAuth.initializeAuth(app, {
+      persistence: reactNativePersistence(AsyncStorage),
+    });
+  } catch (error) {
+    console.error("Firebase initialization error", error);
   }
-);
+} else {
+  app = getApp();
+  auth = firebaseAuth.getAuth(app);
+}
+
+db = getFirestore(app!);
+
+export { app, auth, db };

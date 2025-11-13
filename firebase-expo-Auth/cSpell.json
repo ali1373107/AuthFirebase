@@ -1,0 +1,13 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "Firestore",
+    "firebaseexpoauth",
+    "firebasestorage",
+    "geocoding",
+    "Nominatim",
+    "UrlTile"
+  ],
+  "ignorePaths": []
+}

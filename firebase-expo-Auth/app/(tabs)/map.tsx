@@ -1,39 +1,102 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, TextInput, Button, Alert, Keyboard, Platform } from 'react-native';
-import MapView, { Marker, Region, UrlTile } from 'react-native-maps';
+import { View, StyleSheet, TextInput, Button, Alert, Keyboard, Platform, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import MapView, { Marker, Region, UrlTile, Callout } from 'react-native-maps';
 import * as Location from 'expo-location';
+import { collection, getDocs } from 'firebase/firestore';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { db } from '../../firebaseConfig';
+
+interface CrimeMarkerData {
+  id: string; // Use document ID for the key
+  coordinate: {
+    latitude: number;
+    longitude: number;
+  };
+  crimeType: string;
+  month: string;
+  reportedBy: string;
+}
 
 const MapScreen = () => {
-  const [initialRegion, setInitialRegion] = useState<Region | null>(null);
-  const [markerLocation, setMarkerLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [initialRegion, setInitialRegion] = useState<Region | undefined>(undefined);
+  const [crimeMarkers, setCrimeMarkers] = useState<CrimeMarkerData[]>([]); // State to hold an array of markers
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoadingLocation, setIsLoadingLocation] = useState(true); // New state to track location loading
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Permission to access location was denied');
-        return;
-      }
-
       try {
-        let location = await Location.getCurrentPositionAsync({});
-        const { latitude, longitude } = location.coords;
-        const region = {
-          latitude,
-          longitude,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        };
-        setInitialRegion(region);
-        setMarkerLocation({ latitude, longitude });
-      } catch (error) {
-        Alert.alert("Error", "Could not fetch location. Please make sure location services are enabled.");
-        console.error("Error fetching location: ", error);
+        let markers: CrimeMarkerData[] = []; // Declare markers here, in the higher scope
+        // --- Fetch Crime Data from Firestore ---
+        try {
+          const querySnapshot = await getDocs(collection(db, "Crime"));
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            // Ensure the document has the required fields
+            if (data.Latitude && data.Longitude) {
+              markers.push({
+                id: doc.id,
+                coordinate: { latitude: data.Latitude, longitude: data.Longitude },
+                crimeType: data['Crime type'] || 'N/A',
+                month: data.Month || 'N/A',
+                reportedBy: data['Reported by'] || 'N/A',
+              });
+            }
+          });
+          setCrimeMarkers(markers);
+        } catch (error) {
+          console.error("Error fetching crime data: ", error);
+          Alert.alert("Data Error", "Could not fetch crime data from the database.");
+        }
+
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'Permission to access location was denied');
+          return;
+        }
+
+        // Only set initial region if no markers were found
+        if (markers.length === 0) {
+          try {
+            let location = await Location.getCurrentPositionAsync({});
+            const { latitude, longitude } = location.coords;
+            const region = {
+              latitude,
+              longitude,
+              latitudeDelta: 0.0922,
+              longitudeDelta: 0.0421,
+            };
+            setInitialRegion(region);
+          } catch (error) {
+            console.error("Error fetching location: ", error);
+          }
+        }
+      } finally {
+        setIsLoadingLocation(false);
       }
     })();
   }, []);
+
+  // This new useEffect hook will run whenever crimeMarkers state is updated.
+  useEffect(() => {
+    // We check if there are markers, the map reference is available, and we are not in the initial loading state.
+    if (crimeMarkers.length > 0 && mapRef.current && !isLoadingLocation) {
+      const coordinates = crimeMarkers.map(marker => marker.coordinate);
+      
+      // Animate the map to fit all the markers.
+      mapRef.current.fitToCoordinates(coordinates, {
+        edgePadding: {
+          top: 150, // A bit more padding at the top to account for the search bar
+          right: 50,
+          bottom: 50,
+          left: 50,
+        },
+        animated: true,
+      });
+    }
+  }, [crimeMarkers, isLoadingLocation]); // It depends on both crimeMarkers and the loading state.
 
   const handleSearch = async () => {
     Keyboard.dismiss();
@@ -71,8 +134,14 @@ const MapScreen = () => {
     }
   };
 
+  const centerOnUserLocation = () => {
+    if (initialRegion && mapRef.current) {
+      mapRef.current.animateToRegion(initialRegion, 1000); // Animate over 1 second
+    }
+  };
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
@@ -83,11 +152,15 @@ const MapScreen = () => {
         />
         <Button title="Search" onPress={handleSearch} />
       </View>
-      {initialRegion ? (
+      {isLoadingLocation ? ( // Show loading indicator while fetching location
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0000ff" />
+        </View>
+      ) : ( // If not loading, show the map. It will either have an initialRegion or be fitted to markers.
         <MapView
           ref={mapRef}
           style={styles.map}
-          initialRegion={initialRegion}
+          initialRegion={initialRegion} // The map will now either start at user location OR animate to fit markers
           showsUserLocation={true} // This will show the default blue dot for user location
         >
           <UrlTile
@@ -95,21 +168,34 @@ const MapScreen = () => {
             maximumZ={19}
             flipY={false} // on Android, this may need to be true
           />
-          {markerLocation && (
-            <Marker
-              coordinate={markerLocation}
-              title="Your Location"
-              description="This is your current location"
-            />
-          )}
+          {/* --- Render all crime markers --- */}
+          {crimeMarkers.map((marker) => (
+            <Marker key={marker.id} coordinate={marker.coordinate}>
+              <Callout tooltip>
+                <View style={styles.calloutView}>
+                  <Text style={styles.calloutTitle}>Crime Details</Text>
+                  <Text>
+                    <Text style={styles.calloutLabel}>Crime type: </Text>{marker.crimeType}
+                  </Text>
+                  <Text>
+                    <Text style={styles.calloutLabel}>Month: </Text>{marker.month}
+                  </Text>
+                  <Text><Text style={styles.calloutLabel}>Reported by: </Text>{marker.reportedBy}</Text>
+                </View>
+              </Callout>
+            </Marker>
+          ))}
         </MapView>
-      ) : (
-        // You can show a loading indicator here while fetching location
-        <View style={styles.loadingContainer}>
-          {/* <ActivityIndicator size="large" /> */}
-        </View>
+      ) }
+      {/* Render button only when the map is visible */}
+      {!isLoadingLocation && initialRegion && (
+        <TouchableOpacity
+          style={styles.locationButton}
+          onPress={centerOnUserLocation}>
+          <IconSymbol name="location.fill" size={22} color="#007AFF" />
+        </TouchableOpacity>
       )}
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -150,6 +236,43 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  noLocationContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  locationButton: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    backgroundColor: 'white',
+    borderRadius: 50, // Makes it circular
+    padding: 12,
+    // Shadow for iOS
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    // Elevation for Android
+    elevation: 5,
+  },
+  calloutView: {
+    padding: 10,
+    width: 200,
+    backgroundColor: 'white',
+    borderRadius: 6,
+    borderColor: '#ccc',
+    borderWidth: 0.5,
+  },
+  calloutTitle: {
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginBottom: 5,
+  },
+  calloutLabel: {
+    fontWeight: 'bold',
   },
 });
 

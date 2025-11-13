@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     borderColor: 'gray',
     borderWidth: 1,
     borderRadius: 5,
-    marginRight: 10,
+    marginRight:10,
     paddingHorizontal: 8,
   },
   map: {

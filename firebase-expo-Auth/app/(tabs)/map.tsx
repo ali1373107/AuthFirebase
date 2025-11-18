@@ -43,6 +43,7 @@ const MapScreen = () => {
                 month: data.Month || 'N/A',
                 reportedBy: data['Reported by'] || 'N/A',
               });
+              
             }
           });
           setCrimeMarkers(markers);

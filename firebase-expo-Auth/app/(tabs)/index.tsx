@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, TextInput, Button, Alert, Keyboard, Platform, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
-import MapView, { Marker, Region, UrlTile, Callout } from 'react-native-maps';
+import MapView, { Marker, Region, UrlTile, Callout, Heatmap, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, getDocs } from 'firebase/firestore';
@@ -176,15 +176,24 @@ const MapScreen = () => {
       ) : ( // If not loading, show the map. It will either have an initialRegion or be fitted to markers.
         <MapView
           ref={mapRef}
+          provider={PROVIDER_GOOGLE} // Use Google Maps to enable Heatmap
           style={styles.map}
           initialRegion={initialRegion} // The map will now either start at user location OR animate to fit markers
           showsUserLocation={true} // This will show the default blue dot for user location
         >
-          <UrlTile
-            urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-            maximumZ={19}
-            flipY={false} // on Android, this may need to be true
-          />
+          {/* --- Heatmap is temporarily disabled until Google Maps API key is configured --- */}
+          {/*
+          {crimeMarkers.length > 0 && (
+            <Heatmap
+              points={crimeMarkers.map(marker => marker.coordinate)}
+              radius={50} // Controls the "influence" of each point
+              opacity={0.7} // Overall transparency of the heatmap layer
+              gradient={{
+                colors: ["#00ff00", "#ffff00", "#ff0000"], // Green -> Yellow -> Red
+                startPoints: [0.01, 0.2, 0.9], // Defines where the color transitions start
+              }}
+            />
+          )} */}
           {/* --- Render all crime markers --- */}
           {crimeMarkers.map((marker) => (
             <Marker key={marker.id} coordinate={marker.coordinate}>
